@@ -1,11 +1,33 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { TopNav } from "@/components/TopNav";
+import { AgentLimbs } from "@/components/AgentLimbs";
+import { CenterWorkspace } from "@/components/CenterWorkspace";
+import { ReasoningTrace } from "@/components/ReasoningTrace";
+import heroBg from "@/assets/hero-bg.jpg";
 
 const Index = () => {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
+    <div 
+      className="min-h-screen bg-background"
+      style={{
+        backgroundImage: `url(${heroBg})`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundAttachment: "fixed",
+      }}
+    >
+      {/* Top Navigation */}
+      <TopNav />
+
+      {/* Three-Panel Layout */}
+      <div className="flex w-full">
+        {/* Left Sidebar - Agent Limbs */}
+        <AgentLimbs />
+
+        {/* Center Workspace */}
+        <CenterWorkspace />
+
+        {/* Right Panel - Reasoning Trace */}
+        <ReasoningTrace />
       </div>
     </div>
   );
