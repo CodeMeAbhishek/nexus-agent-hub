@@ -87,10 +87,10 @@ export const ReasoningTrace = () => {
 
   const getLogColor = (type: LogEntry["type"]) => {
     switch (type) {
-      case "action": return "text-blue-400";
-      case "result": return "text-emerald-400";
-      case "error": return "text-red-400";
-      default: return "text-emerald-500";
+      case "action": return "text-[hsl(var(--log-action))]";
+      case "result": return "text-[hsl(var(--log-result))]";
+      case "error": return "text-[hsl(var(--log-error))]";
+      default: return "text-[hsl(var(--log-info))]";
     }
   };
 
@@ -104,7 +104,7 @@ export const ReasoningTrace = () => {
   };
 
   return (
-    <aside className="fixed right-0 top-16 bottom-0 w-80 glass-panel flex flex-col z-40">
+    <aside className="fixed right-0 top-16 bottom-0 w-80 bg-card/80 backdrop-blur-xl border-l border-border/30 flex flex-col z-40">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-white/10">
         <motion.div 
@@ -156,7 +156,7 @@ export const ReasoningTrace = () => {
                 layout
                 className="flex items-start gap-2"
               >
-                <span className="text-xs text-muted-foreground/60 font-mono shrink-0 mt-0.5">
+                <span className="text-xs text-[hsl(var(--log-timestamp))] font-mono shrink-0 mt-0.5">
                   {formatTime(log.timestamp)}
                 </span>
                 <p className={`terminal text-sm ${getLogColor(log.type)} leading-relaxed`}>
