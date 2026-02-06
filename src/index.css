@@ -40,6 +40,13 @@
 
     --radius: 0.75rem;
 
+    /* Terminal Log Colors */
+    --log-info: 152 60% 30%;
+    --log-action: 217 70% 45%;
+    --log-result: 152 60% 35%;
+    --log-error: 0 70% 50%;
+    --log-timestamp: 0 0% 40%;
+
     /* Glass UI Variables */
     --glass-bg: 0 0% 100% / 0.3;
     --glass-bg-light: 0 0% 100% / 0.5;
