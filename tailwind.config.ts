@@ -68,7 +68,6 @@ export default {
         // Platform accent colors
         slack: "hsl(var(--slack-purple))",
         github: "hsl(var(--github-black))",
-        stripe: "hsl(var(--stripe-blue))",
         notion: "hsl(var(--notion-black))",
         mongodb: "hsl(var(--mongodb-green))",
       },

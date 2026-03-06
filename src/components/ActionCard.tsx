@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 
 export interface ActionCardData {
   id: string;
-  type: "stripe" | "notion" | "github";
+  type: "notion" | "github";
   title: string;
   description: string;
   details?: Record<string, string>;
@@ -36,13 +36,6 @@ const cardVariants = {
 };
 
 const platformConfig = {
-  stripe: {
-    icon: CreditCard,
-    color: "text-blue-600",
-    bgColor: "bg-blue-500/10",
-    badgeColor: "bg-blue-100 text-blue-700",
-    borderColor: "border-blue-200/30",
-  },
   notion: {
     icon: FileText,
     color: "text-gray-900",
@@ -69,7 +62,7 @@ export const ActionCard = ({ data, onApprove, onReject, index }: ActionCardProps
       variants={cardVariants}
       initial="hidden"
       animate="visible"
-      whileHover={{ 
+      whileHover={{
         scale: 1.01,
         boxShadow: "0 12px 40px 0 rgba(0, 0, 0, 0.08)",
       }}
@@ -77,7 +70,7 @@ export const ActionCard = ({ data, onApprove, onReject, index }: ActionCardProps
     >
       <div className="flex items-start gap-3">
         {/* Platform Icon */}
-        <motion.div 
+        <motion.div
           className={`w-10 h-10 rounded-full ${config.bgColor} flex items-center justify-center shrink-0`}
           whileHover={{ scale: 1.1, rotate: 5 }}
         >
@@ -94,7 +87,7 @@ export const ActionCard = ({ data, onApprove, onReject, index }: ActionCardProps
               {data.type.charAt(0).toUpperCase() + data.type.slice(1)}
             </span>
           </div>
-          
+
           <p className="text-muted-foreground text-sm line-clamp-2 mb-3">
             {data.description}
           </p>
@@ -164,7 +157,7 @@ export const ActionCard = ({ data, onApprove, onReject, index }: ActionCardProps
                 </motion.div>
               )}
             </div>
-            
+
             <span className="text-xs text-muted-foreground flex items-center gap-1">
               <Clock className="w-3 h-3" />
               {data.timestamp}
