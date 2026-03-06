@@ -1,42 +1,56 @@
 # Deploy Supabase proxy (5 min) — fix login from India
 
-Deploy the `supabase-proxy` folder to **Render**, then point `SUPABASE_URL` in `backend/.env` at the proxy URL.
+Deploy the `supabase-proxy` folder to **Railway**, **Fly.io**, or **Render**, then set `SUPABASE_URL` in `backend/.env` to the proxy URL (no trailing slash).
+
+---
+
+## Railway (recommended)
+
+1. **[railway.app](https://railway.app)** → **Login with GitHub**.
+
+2. **New Project** → **Deploy from GitHub repo** → select **`nexus-agent-hub`**.  
+   - If the repo doesn’t appear: click **Configure GitHub App**, then on GitHub add `nexus-agent-hub` to the repos Railway can access. Refresh Railway and try again.
+
+3. After the service is created, open it and configure:
+   - **Settings** → **Root Directory** → set to **`supabase-proxy`** → **Save**.
+   - **Variables** → **New Variable** → name **`SUPABASE_ORIGIN`**, value **`https://bckwiupiefznkojxejbx.supabase.co`** (use your Supabase project URL if different).
+   - **Settings** → **Networking** → **Generate Domain** → copy the URL (e.g. `https://nexus-agent-hub-production-xxxx.up.railway.app`).
+
+4. In **`backend/.env`** set (no trailing slash):
+   ```env
+   SUPABASE_URL=https://YOUR-RAILWAY-URL
+   ```
+   Restart the backend and test login.
+
+   **If the build fails** with "context canceled" or "copy /mise/installs": the repo now includes `railway.json` so Railway uses the **Dockerfile** builder. Commit and push, then trigger a new deploy.
+
+---
+
+## Fly.io
+
+*Requires a payment method on file (free tier usage is not charged).*
+
+1. Install [flyctl](https://fly.io/docs/hub/quickstart/) and run `fly auth login` (or `& "$env:USERPROFILE\.fly\bin\flyctl.exe" auth login` on Windows if `fly` isn’t in PATH).
+2. `cd supabase-proxy` → `fly launch --no-deploy --name supabase-proxy` (use existing `fly.toml` when asked).
+3. `fly secrets set SUPABASE_ORIGIN=https://bckwiupiefznkojxejbx.supabase.co`
+4. `fly deploy` → copy the app URL.
+5. In `backend/.env`: `SUPABASE_URL=https://supabase-proxy.fly.dev` (no trailing slash). Restart backend.
 
 ---
 
 ## Render
 
-**Option A — Blueprint (easiest)**  
-1. [render.com](https://render.com) → **New +** → **Blueprint** → connect `nexus-agent-hub` repo.  
-2. Render reads `render.yaml` and creates the `supabase-proxy` service with the right root directory.  
-3. Open the new service → **Environment** → set `SUPABASE_ORIGIN` = `https://bckwiupiefznkojxejbx.supabase.co`.  
-4. Deploy runs; copy the service URL.
+**Blueprint:** **New +** → **Blueprint** → connect repo. Render uses `render.yaml`; set **Environment** → `SUPABASE_ORIGIN` = `https://bckwiupiefznkojxejbx.supabase.co` → copy service URL.
 
-**Option B — Web Service (manual)**  
-1. **New +** → **Web Service** → connect `nexus-agent-hub` repo.  
-2. **Important:** In **Settings**, set **Root Directory** to `supabase-proxy` (otherwise you get `Cannot find module 'server.js'`).  
-3. **Build Command:** leave empty. **Start Command:** `node server.js`.  
-4. **Environment:** add `SUPABASE_ORIGIN` = `https://bckwiupiefznkojxejbx.supabase.co`.  
-5. **Create Web Service** → copy the service URL.
+**Manual:** **New +** → **Web Service** → connect repo → **Root Directory** = `supabase-proxy`, **Start Command** = `node server.js`, **Environment** = `SUPABASE_ORIGIN` = your Supabase URL → copy service URL.
 
-6. **Backend .env:**  
-   In `backend/.env` set (no trailing slash):
-   ```env
-   SUPABASE_URL=https://supabase-proxy-xxxx.onrender.com
-   ```
-   Restart the backend. Test login from India.
+Then in `backend/.env`: `SUPABASE_URL=https://your-service.onrender.com` (no trailing slash). Restart backend.
 
 ---
 
-## Checklist
+## Checklist (any platform)
 
-- [ ] Render Web Service created from `supabase-proxy` with `SUPABASE_ORIGIN` set
-- [ ] `SUPABASE_URL` in `backend/.env` = Render URL (no trailing slash)
-- [ ] Backend restarted
-- [ ] Login works
-
----
-
-## Alternative: Railway
-
-**New Project** → Deploy from GitHub → **Settings → Root Directory** = `supabase-proxy` → **Variables:** `SUPABASE_ORIGIN` = `https://bckwiupiefznkojxejbx.supabase.co` → **Networking → Generate Domain**. Use that URL as `SUPABASE_URL` in `backend/.env`.
+- [ ] Proxy deployed with **Root Directory** (or equivalent) = `supabase-proxy`
+- [ ] `SUPABASE_ORIGIN` set on the proxy service
+- [ ] `SUPABASE_URL` in `backend/.env` = proxy URL, no trailing slash
+- [ ] Backend restarted → test login

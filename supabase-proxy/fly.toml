@@ -1,0 +1,21 @@
+# Fly.io config for supabase-proxy. Run: fly launch --no-deploy  (then fly secrets set SUPABASE_ORIGIN=... ; fly deploy)
+app = "supabase-proxy"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "3000"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1
