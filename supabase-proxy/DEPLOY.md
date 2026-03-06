@@ -6,25 +6,18 @@ Deploy the `supabase-proxy` folder to **Render**, then point `SUPABASE_URL` in `
 
 ## Render
 
-1. **Sign in:** [render.com](https://render.com) → Login with GitHub.
+**Option A — Blueprint (easiest)**  
+1. [render.com](https://render.com) → **New +** → **Blueprint** → connect `nexus-agent-hub` repo.  
+2. Render reads `render.yaml` and creates the `supabase-proxy` service with the right root directory.  
+3. Open the new service → **Environment** → set `SUPABASE_ORIGIN` = `https://bckwiupiefznkojxejbx.supabase.co`.  
+4. Deploy runs; copy the service URL.
 
-2. **New Web Service:**  
-   **New +** → **Web Service** → connect the `nexus-agent-hub` repo (or your fork).
-
-3. **Configure:**
-   - **Root Directory:** `supabase-proxy`
-   - **Build Command:** leave empty
-   - **Start Command:** `node server.js`
-   - **Instance type:** Free
-
-4. **Environment:**  
-   **Environment** tab → **Add Environment Variable**:
-   - Key: `SUPABASE_ORIGIN`
-   - Value: `https://bckwiupiefznkojxejbx.supabase.co`  
-   (use your Supabase project URL if different.)
-
-5. **Create Web Service.**  
-   Wait for deploy, then copy the service URL (e.g. `https://supabase-proxy-xxxx.onrender.com`).
+**Option B — Web Service (manual)**  
+1. **New +** → **Web Service** → connect `nexus-agent-hub` repo.  
+2. **Important:** In **Settings**, set **Root Directory** to `supabase-proxy` (otherwise you get `Cannot find module 'server.js'`).  
+3. **Build Command:** leave empty. **Start Command:** `node server.js`.  
+4. **Environment:** add `SUPABASE_ORIGIN` = `https://bckwiupiefznkojxejbx.supabase.co`.  
+5. **Create Web Service** → copy the service URL.
 
 6. **Backend .env:**  
    In `backend/.env` set (no trailing slash):

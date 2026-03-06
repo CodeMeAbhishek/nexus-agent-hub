@@ -1,0 +1,12 @@
+# Render Blueprint: Supabase proxy (for login when *.supabase.co is blocked, e.g. India)
+# Deploy: New + → Blueprint → connect this repo → Add SUPABASE_ORIGIN in dashboard.
+services:
+  - type: web
+    name: supabase-proxy
+    runtime: node
+    rootDir: supabase-proxy
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: SUPABASE_ORIGIN
+        sync: false   # set in Render Dashboard: https://bckwiupiefznkojxejbx.supabase.co
