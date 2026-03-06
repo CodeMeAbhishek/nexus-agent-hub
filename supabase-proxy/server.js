@@ -13,11 +13,25 @@ async function readBody(req) {
 
 const server = require('http').createServer(async (req, res) => {
   const url = new URL(req.url || '/', `http://${req.headers.host}`);
+
+  // Health check: GET / or /health
+  if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/health')) {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({
+      ok: true,
+      supabase_origin_set: !!process.env.SUPABASE_ORIGIN,
+      target: SUPABASE_ORIGIN,
+    }));
+  }
+
   const target = SUPABASE_ORIGIN + url.pathname + url.search;
 
-  const headers = { ...req.headers, host: HOST };
-  delete headers['host'];
-  headers['host'] = HOST;
+  // Forward only safe headers; let fetch set Content-Length for body
+  const skip = new Set(['host', 'connection', 'content-length', 'transfer-encoding']);
+  const headers = { host: HOST };
+  for (const [k, v] of Object.entries(req.headers)) {
+    if (v != null && !skip.has(k.toLowerCase())) headers[k] = v;
+  }
 
   const opts = { method: req.method, headers };
   if (!['GET', 'HEAD'].includes(req.method)) opts.body = await readBody(req);
