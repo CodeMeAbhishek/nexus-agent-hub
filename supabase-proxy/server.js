@@ -43,8 +43,9 @@ const server = require('http').createServer(async (req, res) => {
     const buf = await r.arrayBuffer();
     res.end(Buffer.from(buf));
   } catch (e) {
+    const detail = e.cause ? `${e.message} (${e.cause.message || e.cause})` : e.message;
     res.writeHead(502, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'Proxy failed', detail: String(e.message) }));
+    res.end(JSON.stringify({ error: 'Proxy failed', detail: String(detail) }));
   }
 });
 
