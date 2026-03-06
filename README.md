@@ -24,6 +24,8 @@ uvicorn app.main:app --reload --port 8000
 
 Set `VITE_API_URL=http://localhost:8000` in frontend `.env` if needed. See `backend/README.md` for env and API tokens.
 
+**Login from India:** Supabase can be blocked there. Deploy the proxy in `supabase-proxy/` (see [supabase-proxy/DEPLOY.md](supabase-proxy/DEPLOY.md)) and set `SUPABASE_URL` to the proxy URL in `backend/.env`.
+
 ## Scripts
 
 - `npm run dev` — Start dev server with hot reload

@@ -1,0 +1,8 @@
+{
+  "name": "supabase-proxy",
+  "version": "1.0.0",
+  "description": "Reverse proxy for Supabase when *.supabase.co is blocked (e.g. India)",
+  "main": "server.js",
+  "engines": { "node": ">=18" },
+  "scripts": { "start": "node server.js" }
+}
