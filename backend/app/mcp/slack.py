@@ -47,9 +47,11 @@ def _build_cmd():
 
 def _start_process(token: str, team_id: str | None = None) -> subprocess.Popen:
     env = os.environ.copy()
-    env["SLACK_BOT_TOKEN"] = token
-    if team_id:
-        env["SLACK_TEAM_ID"] = team_id
+    # Subprocess env values must be strings (Windows enforces this)
+    if token is not None:
+        env["SLACK_BOT_TOKEN"] = str(token)
+    if team_id is not None and team_id != "":
+        env["SLACK_TEAM_ID"] = str(team_id)
     env["PYTHONUNBUFFERED"] = "1"
     env["NODE_NO_WARNINGS"] = "1"
 
@@ -326,6 +328,8 @@ def get_slack_limb_status() -> dict:
 
 def get_slack_tool_list(token: str | None = None, team_id: str | None = None) -> list[dict]:
     """Get list of Slack MCP tools for agent prompt."""
+    if not token:
+        return []
     result = _call_slack_persistent("tools/list", None, token=token, team_id=team_id)
     
     if isinstance(result, str):
@@ -336,12 +340,14 @@ def get_slack_tool_list(token: str | None = None, team_id: str | None = None) ->
 
 def call_slack_tool(tool_name: str, arguments: dict, token: str | None = None, team_id: str | None = None) -> str:
     """Call a specific Slack MCP tool."""
+    logger.info("Calling Slack tool: %s with args: %s", tool_name, arguments)
     result = _call_slack_persistent("tools/call", {
         "name": tool_name,
         "arguments": arguments
     }, token=token, team_id=team_id)
     
     if isinstance(result, str):
+        logger.warning("Slack tool returned error: %s", result)
         return result
     
     # Extract text content from result

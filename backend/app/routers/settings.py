@@ -113,9 +113,8 @@ async def connect_limb(
     Connect a limb by storing its credentials.
     The token is encrypted before storage.
     """
-    # Validate limb_id
-    valid_limbs = {"notion", "slack", "gmail", "github", "mongodb", "googledrive", "filesystem", "calendar"}
-    if limb_id not in valid_limbs:
+    from app.core.limbs import get_valid_limb_ids
+    if limb_id not in get_valid_limb_ids():
         raise HTTPException(status_code=400, detail=f"Invalid limb: {limb_id}")
     
     # Store the credentials

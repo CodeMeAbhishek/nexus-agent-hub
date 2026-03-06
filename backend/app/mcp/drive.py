@@ -133,7 +133,8 @@ def get_drive_tools(user_id: str) -> List[Any]:
     async def read_drive_file(file_id: str) -> str:
         """
         Read the content of a Google Drive file by its ID.
-        Supports Google Docs, Sheets (as CSV), and plain text files.
+        Supports Google Docs, Sheets (as CSV), Slides, plain text, and PDFs (text extraction).
+        Use search_drive_files or list_drive_files first to get the file_id for a file by name.
         Args:
             file_id: The file ID from Google Drive (get this from search_drive_files or list_drive_files)
         """
@@ -189,6 +190,26 @@ def get_drive_tools(user_id: str) -> List[Any]:
                     _, done = downloader.next_chunk()
                 text = buffer.getvalue().decode('utf-8', errors='replace')
                 return f"📄 **{name}**\n\n{text[:3000]}"
+
+            # PDF → download and extract text
+            elif mime == 'application/pdf':
+                from googleapiclient.http import MediaIoBaseDownload
+                from pypdf import PdfReader
+                request = service.files().get_media(fileId=file_id)
+                buffer = io.BytesIO()
+                downloader = MediaIoBaseDownload(buffer, request)
+                done = False
+                while not done:
+                    _, done = downloader.next_chunk()
+                buffer.seek(0)
+                reader = PdfReader(buffer)
+                text_parts = []
+                for page in reader.pages:
+                    text_parts.append(page.extract_text() or "")
+                text = "\n".join(text_parts).strip()
+                if not text:
+                    return f"📕 **{name}** (PDF)\n\nNo extractable text in this PDF (may be scanned or image-only)."
+                return f"📕 **{name}** (PDF)\n\n{text[:8000]}"
 
             else:
                 return f"📎 **{name}** — File type '{_friendly_mime(mime)}' cannot be read as text. Use the Google Drive link to view it."

@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { BASE } from '@/lib/api';
 
 export interface StreamLog {
     id: string;
@@ -69,7 +70,7 @@ export function useAgentStream(): UseAgentStreamReturn {
                 session_id: options?.sessionId
             };
 
-            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/chat/stream`, {
+            const response = await fetch(`${BASE}/api/chat/stream`, {
                 method: 'POST',
                 headers,
                 body: JSON.stringify(body),

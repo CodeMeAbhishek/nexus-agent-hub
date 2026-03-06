@@ -3,7 +3,8 @@
  * Uses VITE_API_URL if set; otherwise same host as the page on port 8000
  * so 127.0.0.1:8080 → http://127.0.0.1:8000 (avoids localhost vs 127.0.0.1 mismatch).
  */
-const BASE =
+/** Shared API base URL for all backend requests (also export for useAgentStream). */
+export const BASE =
   import.meta.env.VITE_API_URL ??
   (typeof window !== "undefined"
     ? `${window.location.protocol}//${window.location.hostname}:8000`
@@ -168,7 +169,8 @@ export async function getUserSettings(): Promise<UserSettings | null> {
       headers: { ...getAuthHeaders() },
     });
     if (!res.ok) return null;
-    return res.json();
+    const data = await res.json();
+    return data?.data ?? null;
   } catch {
     return null;
   }
@@ -199,7 +201,8 @@ export async function getUserConnections(): Promise<UserConnection[]> {
       headers: { ...getAuthHeaders() },
     });
     if (!res.ok) return [];
-    return res.json();
+    const data = await res.json();
+    return data?.data ?? [];
   } catch {
     return [];
   }
@@ -265,9 +268,9 @@ export async function exchangeGmailToken(
 
     const data = await res.json();
     if (!res.ok) {
-      return { success: false, message: data.detail || "Failed to connect" };
+      return { success: false, message: data.detail || data.message || "Failed to connect" };
     }
-    return { success: true, message: data.message };
+    return { success: true, message: data.data?.message ?? data.message ?? "Connected" };
   } catch (error) {
     return { success: false, message: "Network error" };
   }
@@ -289,9 +292,9 @@ export async function exchangeCalendarToken(
 
     const data = await res.json();
     if (!res.ok) {
-      return { success: false, message: data.detail || "Failed to connect" };
+      return { success: false, message: data.detail || data.message || "Failed to connect" };
     }
-    return { success: true, message: data.message };
+    return { success: true, message: data.data?.message ?? data.message ?? "Connected" };
   } catch (error) {
     return { success: false, message: "Network error" };
   }
@@ -313,9 +316,9 @@ export async function exchangeDriveToken(
 
     const data = await res.json();
     if (!res.ok) {
-      return { success: false, message: data.detail || "Failed to connect" };
+      return { success: false, message: data.detail || data.message || "Failed to connect" };
     }
-    return { success: true, message: data.message };
+    return { success: true, message: data.data?.message ?? data.message ?? "Connected" };
   } catch (error) {
     return { success: false, message: "Network error" };
   }

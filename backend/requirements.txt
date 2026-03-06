@@ -2,6 +2,7 @@
 fastapi==0.115.6
 uvicorn[standard]==0.32.1
 python-dotenv==1.0.1
+pydantic-settings>=2.0.0
 
 # MCP (Notion limb — Phase 1.2)
 mcp>=1.0.0
@@ -16,5 +17,9 @@ langchain-google-genai>=0.2.0           # Groq (fast, free tier)
 langchain-openai
 notion-client
 langchain-nvidia-ai-endpoints
-pymongo>=4.0
+# [ocsp] uses PyOpenSSL + certifi; helps Atlas SSL handshake on Windows (Python 3.10+)
+pymongo[ocsp]>=4.0
+# PDF text extraction for Drive file reading
+pypdf>=5.0.0
+certifi>=2024.0.0
 requests>=2.31.0

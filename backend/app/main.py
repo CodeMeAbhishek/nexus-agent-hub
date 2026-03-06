@@ -1,44 +1,41 @@
 """
 Nexus Agent Hub — FastAPI backend.
-Orchestration + MCP connectivity; SSE streaming in Phase 3.
+Orchestration + MCP connectivity; SSE streaming. Scalable, config-driven design.
 """
-import asyncio
-import os
+import logging
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import chat, health, tools, stream, settings, history
 from app.auth import routes as auth_routes
-from app.utils.response import error_response
+from app.core.config import get_settings
+from app.middleware.rate_limit import InMemoryRateLimitMiddleware
+from app.middleware.request_id import RequestIDMiddleware
+from app.routers import chat, health, tools, stream, settings, history
 from app.utils.exceptions import NexusException
-from fastapi import Request
-from fastapi.exceptions import RequestValidationError
-import logging
-import sys
+from app.utils.response import error_response
 
-# Configure logging for the entire application
+_backend_root = Path(__file__).resolve().parent.parent
+load_dotenv(_backend_root / ".env")
+
+# Structured logging: include module and level; request_id can be added per-request in log format
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     datefmt="%H:%M:%S",
     stream=sys.stdout,
 )
-
-# Suppress noisy libraries
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 logging.getLogger("watchfiles").setLevel(logging.WARNING)
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
-
-# Load .env from backend/ so OPENAI_API_KEY etc. are found regardless of cwd
-_backend_root = Path(__file__).resolve().parent.parent
-load_dotenv(_backend_root / ".env")
 
 
 @asynccontextmanager
@@ -58,12 +55,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+config = get_settings()
+app.add_middleware(RequestIDMiddleware)
+app.add_middleware(InMemoryRateLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.environ.get(
-        "CORS_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080"
-    ).split(","),
+    allow_origins=config.cors_origins_list(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

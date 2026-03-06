@@ -96,7 +96,7 @@ class CallSlackInput(BaseModel):
     )
     arguments: dict = Field(
         default_factory=dict,
-        description="Arguments object. For post_message: {channel_id, text}. For history: {channel_id, limit}."
+        description="Arguments. For post_message: channel_id = Slack channel ID (C0xxx from list_channels). text = ONLY the message body to post (e.g. 'CN Assignment is remaining'); do NOT include the user's full request or concatenate instructions — extract just the content to post. For history: channel_id, limit."
     )
 
 def build_slack_tool(tool_list: list[dict], token: str | None = None, team_id: str | None = None) -> StructuredTool:
@@ -110,7 +110,7 @@ def build_slack_tool(tool_list: list[dict], token: str | None = None, team_id: s
     
     desc = (
         f"Call a Slack API operation. Available tools: {names}. "
-        "For posting messages, use channel_id and text. For channel history, use channel_id and limit."
+        "For post_message: channel_id = channel ID (C0xxx) from list_channels. text = ONLY the exact message body (e.g. for 'notify X that Y' use text: 'Y' only). Never put the full user request or concatenate strings into text. For history: channel_id and limit."
     )
 
     async def call_slack(tool_name: str, arguments: dict) -> str:
@@ -133,22 +133,22 @@ def build_slack_tool(tool_list: list[dict], token: str | None = None, team_id: s
 
 class CallGitHubInput(BaseModel):
     tool_name: str = Field(
-        description="GitHub MCP tool name. Common: search_repositories, list_issues, get_file_content, create_issue, get_github_user"
+        description="GitHub MCP tool name. Common: get_github_user, search_repositories, list_issues, get_file_content, create_issue"
     )
     arguments: dict = Field(
         default_factory=dict,
-        description="Arguments object. For list_issues: {owner, repo}. For search: {query}. For get_github_user: {}"
+        description="For search_repositories: query is REQUIRED (never empty). To list the user's repos, first call get_github_user, then use query: 'user:<username>'. For list_issues: {owner, repo}. For get_github_user: {}."
     )
 
 def build_github_tool(tool_list: list[dict], user_id: str | None = None) -> StructuredTool:
     """Build a single LangChain tool that calls GitHub MCP."""
-    names = "search_repositories, list_issues, create_issue, get_file_content"
+    names = "get_github_user, search_repositories, list_issues, create_issue, get_file_content"
     if tool_list:
          names = ", ".join(t.get("name", "") for t in tool_list[:5])
 
     desc = (
         f"Call a GitHub API operation. Available tools: {names}. "
-        "Use this for managing code, issues, and repositories."
+        "search_repositories requires a non-empty query. To list the user's repositories, call get_github_user first, then search_repositories with query 'user:<login>'. Never call search_repositories with an empty query."
     )
 
     async def call_github(tool_name: str, arguments: dict) -> str:

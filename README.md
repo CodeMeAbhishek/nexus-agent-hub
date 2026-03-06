@@ -24,7 +24,14 @@ uvicorn app.main:app --reload --port 8000
 
 Set `VITE_API_URL=http://localhost:8000` in frontend `.env` if needed. See `backend/README.md` for env and API tokens.
 
-**Login from India:** Supabase can be blocked there. Deploy the proxy in `supabase-proxy/` (see [supabase-proxy/DEPLOY.md](supabase-proxy/DEPLOY.md)) and set `SUPABASE_URL` to the proxy URL in `backend/.env`.
+## Connecting MongoDB (fresh Atlas)
+
+1. **Create a free cluster** at [cloud.mongodb.com](https://cloud.mongodb.com). Sign up or log in → Build a Database → choose **M0 Free** → pick a region → Create.
+2. **Create a DB user**: Database Access → Add New User → set username/password → Add User.
+3. **Allow network access**: Network Access → Add IP Address → Add Current IP (or `0.0.0.0/0` for testing).
+4. **Get the connection string**: Database → Connect → Drivers → copy the **connection string** (e.g. `mongodb+srv://user:password@cluster.xxxxx.mongodb.net/?retryWrites=true&w=majority`). Replace `<password>` with your DB user password.
+5. **In the app**: Open Nexus Agent Hub → **Settings** (or **Limbs**) → find **MongoDB** → **Connect** → paste the connection string → Connect.
+6. **Backend (Windows + Atlas)**: If you see an SSL handshake error, run in the backend folder: `pip install "pymongo[tls]"` then restart the server.
 
 ## Scripts
 

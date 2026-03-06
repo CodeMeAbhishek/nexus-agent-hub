@@ -150,10 +150,15 @@ async def signup(request: SignupRequest):
     except HTTPException:
         raise
     except Exception as e:
-        error_msg = str(e)
-        if "already registered" in error_msg.lower():
+        error_msg = str(e).lower()
+        if "already registered" in error_msg:
             raise HTTPException(status_code=409, detail="Email already registered")
         logger.error(f"Signup failed: {e}")
+        if "getaddrinfo" in error_msg or "11001" in str(e) or "name or service not known" in error_msg:
+            raise HTTPException(
+                status_code=503,
+                detail="Cannot reach the authentication server. Check your internet connection and DNS, or try again in a few minutes.",
+            )
         raise HTTPException(status_code=400, detail=str(e))
 
 
@@ -191,6 +196,12 @@ async def login(request: LoginRequest):
         if "invalid" in error_msg or "credentials" in error_msg:
             raise HTTPException(status_code=401, detail="Invalid email or password")
         logger.error(f"Login failed: {e}")
+        # User-friendly message for DNS/network failures (e.g. getaddrinfo failed)
+        if "getaddrinfo" in error_msg or "11001" in str(e) or "name or service not known" in error_msg:
+            raise HTTPException(
+                status_code=503,
+                detail="Cannot reach the authentication server. Check your internet connection and DNS, or try again in a few minutes.",
+            )
         raise HTTPException(status_code=400, detail=str(e))
 
 

@@ -346,14 +346,15 @@ async def get_notion_limb_status() -> dict:
     if _cached is not None and (now - _cached_at) < _CACHE_TTL_SEC:
         return _cached
 
-    if not _get_notion_token():
+    api_token = _get_notion_token()
+    if not api_token:
         return _disconnected_limb()
 
     try:
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
-            _executor, 
-            lambda: _call_notion_persistent("tools/list", {}, token=api_token)
+            _executor,
+            lambda: _call_notion_persistent("tools/list", {}, token=api_token),
         )
         
         if isinstance(result, str):
@@ -376,6 +377,21 @@ async def get_notion_limb_status() -> dict:
         return _disconnected_limb()
 
 
+# Map schema-friendly names (used in agent prompts) to actual Notion MCP tool names
+NOTION_TOOL_ALIASES = {
+    "notion-search-pages": "API-post-search",
+    "notion-retrieve-block-children": "API-get-block-children",
+    "notion-query-database": "API-query-data-source",
+    "notion-retrieve-a-database": "API-retrieve-a-database",
+    "notion-retrieve-a-page": "API-retrieve-a-page",
+    "notion-patch-page": "API-patch-page",
+    "notion-post-page": "API-post-page",
+    "notion-retrieve-a-block": "API-retrieve-a-block",
+    "notion-update-a-block": "API-update-a-block",
+    "notion-patch-block-children": "API-patch-block-children",
+}
+
+
 async def call_notion_tool(tool_name: str, arguments: dict, token: str | None = None) -> str:
     """Call a Notion MCP tool via synchronous subprocess."""
     # Use provided token or fallback to env (only if allowed, but user requested no fallbacks so agent will pass token)
@@ -383,15 +399,18 @@ async def call_notion_tool(tool_name: str, arguments: dict, token: str | None = 
     
     if not api_token:
         return "Notion not configured (active connection required)."
+
+    # Resolve alias so LLM can use schema names (e.g. notion-search-pages) while MCP expects API-post-search
+    mcp_name = NOTION_TOOL_ALIASES.get(tool_name, tool_name)
     
-    logger.info("Calling Notion tool: %s with args: %s", tool_name, arguments)
+    logger.info("Calling Notion tool: %s with args: %s", mcp_name, arguments)
     
     try:
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
             _executor,
             lambda: _call_notion_persistent("tools/call", {
-                "name": tool_name,
+                "name": mcp_name,
                 "arguments": arguments
             }, token=api_token)
         )

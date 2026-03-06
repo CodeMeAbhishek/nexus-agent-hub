@@ -118,8 +118,10 @@ def get_calendar_tools(user_id: str) -> List[Any]:
         """
         service = await _get_calendar_service(user_id)
         if not service:
+            logger.warning("Calendar: no service (not connected)")
             return "Google Calendar is not connected. Please connect it in Settings."
 
+        logger.info("Creating calendar event: summary=%s start=%s end=%s", summary, start_time, end_time)
         try:
             event_body = {
                 'summary': summary,
@@ -142,15 +144,17 @@ def get_calendar_tools(user_id: str) -> List[Any]:
                 body=event_body
             ).execute()
 
+            link = created_event.get('htmlLink', '')
+            logger.info("Calendar event created: id=%s link=%s", created_event.get('id'), link[:50] if link else '')
             return (
-                f"✅ Event created successfully!\n"
+                f"✅ Event created successfully on your **primary Google Calendar**.\n"
                 f"**{summary}**\n"
                 f"Start: {start_time}\n"
                 f"End: {end_time}\n"
-                f"Link: {created_event.get('htmlLink', 'N/A')}"
+                f"View it: {link or 'Open Google Calendar and go to this date.'}"
             )
         except Exception as e:
-            logger.error(f"Error creating calendar event: {e}")
+            logger.error("Error creating calendar event: %s", e)
             return f"Error creating calendar event: {str(e)}"
 
     @tool

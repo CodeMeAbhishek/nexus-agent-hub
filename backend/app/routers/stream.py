@@ -12,6 +12,7 @@ from datetime import datetime
 
 from app.agent.graph import run_agent_streaming
 from app.auth.routes import get_current_user
+from app.db.chat_history import fetch_chat_history
 from app.db.supabase import get_service_client
 
 router = APIRouter()
@@ -34,30 +35,10 @@ async def event_generator(query: str, user_id: str | None = None, session_id: st
     
     try:
         # Fetch chat history if session_id is provided
-        chat_history = []
-        if session_id and user_id:
-            client = get_service_client()
-            if client:
-                try:
-                    # Fetch last 10 messages for context
-                    response = (
-                        client.table("chat_messages")
-                        .select("*")
-                        .eq("session_id", session_id)
-                        .order("created_at", desc=True)
-                        .limit(10)
-                        .execute()
-                    )
-                    db_messages = response.data[::-1] if response.data else []
-                    
-                    from langchain_core.messages import HumanMessage, AIMessage
-                    for msg in db_messages:
-                        if msg["role"] == "user":
-                            chat_history.append(HumanMessage(content=msg["content"]))
-                        elif msg["role"] == "assistant" or msg["role"] == "agent":
-                            chat_history.append(AIMessage(content=msg["content"]))
-                except Exception as e:
-                    print(f"Failed to fetch history for stream: {e}")
+        chat_history = await fetch_chat_history(
+            session_id=session_id or "",
+            user_id=user_id,
+        )
 
         async for event in run_agent_streaming(query, user_id=user_id, chat_history=chat_history):
             # Capture response for saving

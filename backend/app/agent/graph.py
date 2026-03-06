@@ -8,19 +8,19 @@ import logging
 import sys
 from typing import Any
 
-from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, SystemMessage
 from langgraph.prebuilt import create_react_agent
 
-from app.mcp.notion import get_notion_tool_list
-from app.mcp.slack import async_get_slack_tool_list as get_slack_tool_list
-from app.mcp.github import get_github_tool_list
+from app.core.limbs import get_all_limb_keywords, get_keyword_routes
 from app.db.supabase import get_connection_credentials
-from app.mcp.gmail import get_gmail_tools
 from app.mcp.calendar import get_calendar_tools
 from app.mcp.drive import get_drive_tools
+from app.mcp.gmail import get_gmail_tools
+from app.mcp.github import get_github_tool_list
 from app.mcp.mongodb import get_mongodb_tools
+from app.mcp.notion import get_notion_tool_list
+from app.mcp.slack import async_get_slack_tool_list as get_slack_tool_list
 
-# ... existing code ...
 from .prompts import SYSTEM_PROMPT, ROUTER_PROMPT
 from .llm import get_llm
 from .tools import (
@@ -48,44 +48,130 @@ def _get_or_build_graph(route: str, tools: list, llm) -> Any:
 
 
 
-async def route_query(query: str, llm) -> str:
-    """
-    Classify the query — keyword-first (0 ms), LLM fallback only for ambiguous queries.
-    """
-    # Fast path: keyword matching covers ~85% of queries with zero LLM cost
-    _KEYWORD_ROUTES: dict[str, list[str]] = {
-        "conversational": ["hi", "hello", "hey", "thanks", "who are you", "what are you",
-                           "write a poem", "tell me a joke", "help me understand"],
-        "notion":   ["notion", "page", "workspace", "database", "block"],
-        "slack":    ["slack", "channel", "#general", "#", "dm ", "post to"],
-        "github":   ["github", "repo", "repository", "issue", "pull request", "pr",
-                     "commit", "branch", "code"],
-        "gmail":    ["email", "gmail", "inbox", "mail", "send mail", "unread"],
-        "calendar": ["calendar", "schedule", "event", "meeting", "appointment", "standup"],
-        "drive":    ["drive", "gdrive", "google drive", "document", "spreadsheet", "sheet",
-                     "slides", "doc"],
-        "mongodb":  ["mongo", "mongodb", "collection", "aggregate", "pipeline"],
-    }
-    q_lower = query.lower()
-    for route, keywords in _KEYWORD_ROUTES.items():
-        if any(kw in q_lower for kw in keywords):
-            logger.info(f"⚡ Fast-routed '{query[:40]}' → {route} (keyword match)")
-            return route
+# Short user replies that usually mean "continue with what you just offered"
+_SHORT_AFFIRMATIVES = frozenset({
+    "yes", "yeah", "yep", "sure", "ok", "okay", "please", "do it", "get it",
+    "continue", "go ahead", "confirm", "confirmed", "yup", "absolutely",
+    "send it", "send it again", "resend", "try again",
+})
 
-    # Slow path: LLM classifier for ambiguous queries
-    try:
-        from langchain_core.messages import HumanMessage, SystemMessage
-        messages = [
-            SystemMessage(content=ROUTER_PROMPT),
-            HumanMessage(content=query)
-        ]
-        response = await llm.ainvoke(messages)
-        route = response.content.strip().lower()
-        logger.info(f"🔀 LLM-routed '{query[:40]}' → {route}")
-        return route
-    except Exception as e:
-        logger.error(f"Routing failed: {e}")
-        return "general"  # Fallback to loading everything
+
+def _build_agent_messages(chat_history: list, query: str) -> list:
+    """
+    Build the message list for the agent. When the user sends a short affirmative
+    (e.g. "yes") after an assistant message, append a nudge so the agent actually
+    calls the relevant tool instead of replying with text-only confirmation.
+    Chat history from DB has no tool_calls/tool_results, so the model may otherwise
+    assume the action was already done and just reply "I've sent it" without calling.
+    """
+    q = query.strip()
+    if not q:
+        return list(chat_history)
+    last_content = q
+    q_lower = q.lower()
+    nudge = "\n\n(Perform the requested action now by calling the appropriate tool in this turn.)"
+
+    # Nudge when user confirms after assistant (e.g. "yes", "do it")
+    if chat_history:
+        last = chat_history[-1]
+        is_ai = type(last).__name__ == "AIMessage"
+        is_affirmative = q_lower in _SHORT_AFFIRMATIVES or (
+            len(q_lower) <= 25 and any(w in q_lower for w in ("send", "do it", "yes", "please", "sure"))
+        )
+        if is_ai and is_affirmative:
+            last_content = q + nudge
+            logger.info("Nudging agent to use tool after user confirmation")
+            return list(chat_history) + [HumanMessage(content=last_content)]
+
+    # Nudge when user explicitly asks to add/create a calendar event (so agent actually calls the tool)
+    if any(phrase in q_lower for phrase in (
+        "add", "create", "schedule", "put "
+    )) and any(word in q_lower for word in ("calendar", "meeting", "event", "google calendar")):
+        last_content = q + nudge
+        logger.info("Nudging agent to use tool for calendar/create request")
+    return list(chat_history) + [HumanMessage(content=last_content)]
+
+
+# Patterns that indicate the content is internal reasoning/code, not a user-facing reply
+_INTERNAL_PATTERNS = (
+    "tool_name=",
+    "arguments=",
+    "call_notion",
+    "call_slack",
+    "print(",
+    "api-post-search",
+    "first, i will",
+    "i need to search",
+    "i will search",
+    "i will call",
+)
+
+
+def _is_user_facing_content(text: str) -> bool:
+    """True if the text looks like a final user-facing reply, not internal plan/code."""
+    if not text or len(text.strip()) < 10:
+        return False
+    lower = text.lower()
+    for p in _INTERNAL_PATTERNS:
+        if p in lower:
+            return False
+    return True
+
+
+def _extract_text_from_ai_message(m) -> str | None:
+    """Get plain text from an AIMessage, or None if empty."""
+    if not m.content:
+        return None
+    if isinstance(m.content, str):
+        return m.content
+    if isinstance(m.content, list):
+        parts = []
+        for block in m.content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                parts.append(block.get("text", ""))
+            elif isinstance(block, str):
+                parts.append(block)
+        return "".join(parts) if parts else None
+    return str(m.content)
+
+
+async def route_query(query: str, llm, chat_history: list | None = None) -> str:
+    """
+    Route to either 'conversational' (no tools) or 'general' (all tools).
+    User can use any query; the agent gets all connected tools and picks what it needs.
+    """
+    chat_history = chat_history or []
+    q_lower = query.strip().lower()
+
+    # Context-aware: short affirmative after assistant follow-up → keep tools (general)
+    if q_lower in _SHORT_AFFIRMATIVES and chat_history:
+        last = chat_history[-1]
+        is_ai = getattr(last, "type", None) == "ai" or last.__class__.__name__ == "AIMessage"
+        if is_ai:
+            raw = getattr(last, "content", None) or ""
+            if isinstance(raw, list):
+                text = " ".join(
+                    (b.get("text") or "") for b in raw if isinstance(b, dict)
+                ).lower()
+            else:
+                text = str(raw).lower()
+            if "would you like" in text or "channel" in text or "?" in text or len(text) > 60:
+                logger.info(f"⚡ Context-routed '{query[:40]}' → general (affirmative after assistant)")
+                return "general"
+
+    # Dynamic routing: default to general (all tools). Only use conversational for pure chat.
+    limb_keywords = get_all_limb_keywords()
+    conversational_keywords = get_keyword_routes().get("conversational", [])
+
+    if any(kw in q_lower for kw in limb_keywords):
+        logger.info(f"⚡ Routed '{query[:40]}' → general (tool intent detected)")
+        return "general"
+    if any(kw in q_lower for kw in conversational_keywords):
+        logger.info(f"⚡ Routed '{query[:40]}' → conversational (pure chat)")
+        return "conversational"
+    # Unknown or ambiguous query → give agent all tools so it can choose
+    logger.info(f"⚡ Routed '{query[:40]}' → general (default, all tools)")
+    return "general"
 
 
 async def run_agent(query: str, user_id: str | None = None, chat_history: list = []) -> str:
@@ -100,12 +186,11 @@ async def run_agent(query: str, user_id: str | None = None, chat_history: list =
     except ValueError as e:
         return f"Agent not configured: {e}"
 
-    # 1. ROUTE THE QUERY
-    route = await route_query(query, llm)
+    # 1. ROUTE THE QUERY (pass chat_history so "Yes" after assistant follow-up stays tool-aware)
+    route = await route_query(query, llm, chat_history=chat_history)
     
     # Fast path for conversational queries
     if route == "conversational":
-        from langchain_core.messages import HumanMessage, SystemMessage
         # Simple chat interaction without tools
         messages = [
             SystemMessage(content="You are a helpful AI assistant. Answer the user's question directly."),
@@ -141,13 +226,13 @@ async def run_agent(query: str, user_id: str | None = None, chat_history: list =
             return []
         tool_list = await get_notion_tool_list(token=notion_token)
         result = []
-        if tool_list:
+        if tool_list:   
             result.append(build_notion_tool(tool_list, token=notion_token))
-        result.extend(build_write_tools(token=notion_token))
+        result.extend(build_write_tools(token=notion_token))    
         return result
 
     async def _load_slack():
-        if route not in ["slack", "general"]:
+        if route not in ["slack", "general"] or not slack_token:
             return []
         slack_tool_list = await get_slack_tool_list(token=slack_token, team_id=slack_team_id)
         if slack_tool_list:
@@ -218,7 +303,7 @@ async def run_agent(query: str, user_id: str | None = None, chat_history: list =
         return f"Agent setup failed: {e}"
 
     try:
-        inputs = {"messages": chat_history + [HumanMessage(content=query.strip())]}
+        inputs = {"messages": _build_agent_messages(chat_history, query)}
         result = await graph.ainvoke(
             inputs,
             config={"recursion_limit": 25},
@@ -226,14 +311,10 @@ async def run_agent(query: str, user_id: str | None = None, chat_history: list =
     except Exception as e:
         err_str = str(e).lower()
         if "429" in err_str or "resource_exhausted" in err_str or "rate" in err_str:
-            import asyncio
             logger.warning("Rate limit hit, waiting 5 seconds and retrying...")
             await asyncio.sleep(5)
             try:
-                result = await graph.ainvoke(
-                    {"messages": [HumanMessage(content=query.strip())]},
-                    config={"recursion_limit": 25},
-                )
+                result = await graph.ainvoke(inputs, config={"recursion_limit": 25})
             except Exception as retry_e:
                  return "⚠️ Rate limit reached. Please wait 30 seconds and try again."
         elif "recursion" in err_str:
@@ -244,22 +325,19 @@ async def run_agent(query: str, user_id: str | None = None, chat_history: list =
             logger.exception("Agent run failed: %s", e)
             return f"Something went wrong: {e}"
 
-    # Extract the final AI response
+    # Extract the final AI response — prefer last user-facing content (skip internal plan/code)
     messages = result.get("messages", [])
     for m in reversed(messages):
-        if isinstance(m, AIMessage) and m.content:
-            if isinstance(m.content, str):
-                return m.content
-            elif isinstance(m.content, list):
-                text_parts = []
-                for block in m.content:
-                    if isinstance(block, dict) and block.get("type") == "text":
-                        text_parts.append(block.get("text", ""))
-                    elif isinstance(block, str):
-                        text_parts.append(block)
-                return "".join(text_parts)
-            else:
-                return str(m.content)
+        if isinstance(m, AIMessage):
+            text = _extract_text_from_ai_message(m)
+            if text and _is_user_facing_content(text):
+                return text
+    # Fallback: last AI content even if it looks internal (better than nothing)
+    for m in reversed(messages):
+        if isinstance(m, AIMessage):
+            text = _extract_text_from_ai_message(m)
+            if text:
+                return text
     return "No response from agent."
 
 
@@ -279,14 +357,13 @@ async def run_agent_streaming(query: str, user_id: str | None = None, chat_histo
         yield {"type": "error", "message": str(e)}
         return
     
-    # 1. ROUTE THE QUERY
+    # 1. ROUTE THE QUERY (pass chat_history so "Yes" after assistant follow-up stays tool-aware)
     yield {"type": "info", "message": "🧭 Routing query..."}
-    route = await route_query(query, llm)
+    route = await route_query(query, llm, chat_history=chat_history)
     yield {"type": "info", "message": f"👉 Routed to: {route.upper()}"}
     
     # Fast path for conversational
     if route == "conversational":
-        from langchain_core.messages import HumanMessage, SystemMessage
         messages = [
             SystemMessage(content="You are a helpful AI assistant. Answer the user's question directly."),
             HumanMessage(content=query)
@@ -329,7 +406,7 @@ async def run_agent_streaming(query: str, user_id: str | None = None, chat_histo
         return result
 
     async def _sload_slack():
-        if route not in ["slack", "general"]:
+        if route not in ["slack", "general"] or not slack_token:
             return []
         slack_tool_list = await get_slack_tool_list(token=slack_token, team_id=slack_team_id)
         if slack_tool_list:
@@ -406,7 +483,7 @@ async def run_agent_streaming(query: str, user_id: str | None = None, chat_histo
     final_response = None
     
     try:
-        inputs = {"messages": chat_history + [HumanMessage(content=query.strip())]}
+        inputs = {"messages": _build_agent_messages(chat_history, query)}
         async for event in graph.astream(
             inputs,
             config={"recursion_limit": 25},
@@ -418,18 +495,18 @@ async def run_agent_streaming(query: str, user_id: str | None = None, chat_histo
                     for msg in messages:
                         if isinstance(msg, AIMessage):
                             if hasattr(msg, 'tool_calls') and msg.tool_calls:
-                                continue 
+                                for tc in msg.tool_calls:
+                                    name = (
+                                        tc.get("name", "tool")
+                                        if isinstance(tc, dict)
+                                        else getattr(tc, "name", "tool")
+                                    )
+                                    yield {"type": "action", "message": f"🔧 Calling: {name}"}
+                                continue
                             elif msg.content:
-                                if isinstance(msg.content, str):
-                                    final_response = msg.content
-                                elif isinstance(msg.content, list):
-                                    text_parts = []
-                                    for block in msg.content:
-                                        if isinstance(block, dict) and block.get("type") == "text":
-                                            text_parts.append(block.get("text", ""))
-                                        elif isinstance(block, str):
-                                            text_parts.append(block)
-                                    final_response = "".join(text_parts)
+                                text = _extract_text_from_ai_message(msg)
+                                if text and _is_user_facing_content(text):
+                                    final_response = text
                                     
                 elif key == "tools":
                     messages = value.get("messages", [])
@@ -458,7 +535,6 @@ async def run_agent_streaming(query: str, user_id: str | None = None, chat_histo
         err_str = str(e).lower()
         if "429" in err_str or "resource_exhausted" in err_str:
             yield {"type": "error", "message": "⚠️ Rate limit hit. Waiting..."}
-            import asyncio
             await asyncio.sleep(5)
             yield {"type": "info", "message": "🔄 Retrying..."}
             yield {"type": "error", "message": "Rate limit persisted. Try again in 30 seconds."}

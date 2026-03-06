@@ -72,7 +72,7 @@ def get_fernet() -> Optional[Fernet]:
     global _fernet
     if _fernet is not None:
         return _fernet
-    
+
     key = os.environ.get("CREDENTIALS_ENCRYPTION_KEY", "").strip()
     if not key:
         logger.error(
@@ -80,12 +80,20 @@ def get_fernet() -> Optional[Fernet]:
             "Cannot encrypt/decrypt credentials!"
         )
         return None
-    
+
+    key_bytes = key.encode() if isinstance(key, str) else key
     try:
-        _fernet = Fernet(key.encode() if isinstance(key, str) else key)
+        _fernet = Fernet(key_bytes)
         return _fernet
     except Exception as e:
-        logger.error(f"Failed to initialize Fernet: {e}")
+        logger.error(
+            "Failed to initialize Fernet: %s. "
+            "CREDENTIALS_ENCRYPTION_KEY must be a valid Fernet key (32 url-safe base64 bytes). "
+            "Generate one with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\" "
+            "Then set CREDENTIALS_ENCRYPTION_KEY in .env to that value. "
+            "Note: changing the key will make existing stored credentials unreadable.",
+            e,
+        )
         return None
 
 

@@ -238,12 +238,14 @@ export function ConnectionCard({ limb, index, onRefresh }: ConnectionCardProps) 
                     <div className="space-y-4 py-4">
                         <div className="space-y-2">
                             <Label htmlFor="token">
-                                {config.envVar || "Token"}
+                                {limb.id === "mongodb" ? "Connection string" : (config.envVar || "Token")}
                             </Label>
                             <Input
                                 id="token"
                                 type="password"
-                                placeholder={`Enter your ${limb.name} token...`}
+                                placeholder={limb.id === "mongodb"
+                                    ? "mongodb+srv://user:password@cluster.xxxxx.mongodb.net/..."
+                                    : `Enter your ${limb.name} token...`}
                                 value={tokenInput}
                                 onChange={(e) => setTokenInput(e.target.value)}
                                 className="font-mono"
